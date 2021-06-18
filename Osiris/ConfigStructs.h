@@ -25,12 +25,24 @@ struct Color3 {
 };
 #pragma pack(pop)
 
-struct ColorToggle3 : public Color3 {
+struct ColorToggle3 : private Color3 {
+    ColorToggle3() = default;
+    ColorToggle3(float r, float g, float b) : Color3{ { r, g, b } } {}
+
     bool enabled = false;
+
+    Color3& asColor3() noexcept { return static_cast<Color3&>(*this); }
+    const Color3& asColor3() const noexcept { return static_cast<const Color3&>(*this); }
 };
 
-struct ColorToggle : Color4 {
+struct ColorToggle : private Color4 {
+    ColorToggle() = default;
+    ColorToggle(float r, float g, float b, float a) : Color4{ { r, g, b, a } } {}
+
     bool enabled = false;
+
+    Color4& asColor4() noexcept { return static_cast<Color4&>(*this); }
+    const Color4& asColor4() const noexcept { return static_cast<const Color4&>(*this); }
 };
 
 struct ColorToggleThickness : ColorToggle {
@@ -161,12 +173,12 @@ struct PreserveKillfeed {
 };
 
 struct OffscreenEnemies : ColorToggle {
-    OffscreenEnemies() : ColorToggle{ { 1.0f, 0.26f, 0.21f, 1.0f } } {}
+    OffscreenEnemies() : ColorToggle{ 1.0f, 0.26f, 0.21f, 1.0f } {}
     HealthBar healthBar;
 };
 
 struct BulletTracers : ColorToggle {
-    BulletTracers() : ColorToggle{ { 0.0f, 0.75f, 1.0f, 1.0f } } {}
+    BulletTracers() : ColorToggle{ 0.0f, 0.75f, 1.0f, 1.0f } {}
 };
 
 using value_t = json::value_t;
@@ -206,6 +218,37 @@ static void to_json(json& j, const KeyBindToggle& o, const KeyBindToggle& dummy)
 {
     if (o != dummy)
         j = o.toString();
+}
+
+static void to_json(json& j, const ColorToggle& o, const ColorToggle& dummy = {})
+{
+    to_json(j, o.asColor4(), dummy.asColor4());
+    WRITE("Enabled", enabled);
+}
+
+static void to_json(json& j, const Color3& o, const Color3& dummy = {})
+{
+    WRITE("Color", color);
+    WRITE("Rainbow", rainbow);
+    WRITE("Rainbow Speed", rainbowSpeed);
+}
+
+static void to_json(json& j, const ColorToggle3& o, const ColorToggle3& dummy = {})
+{
+    to_json(j, o.asColor3(), dummy.asColor3());
+    WRITE("Enabled", enabled);
+}
+
+static void to_json(json& j, const ColorToggleThickness& o, const ColorToggleThickness& dummy = {})
+{
+    to_json(j, static_cast<const ColorToggle&>(o), dummy);
+    WRITE("Thickness", thickness);
+}
+
+static void to_json(json& j, const HealthBar& o, const HealthBar& dummy = {})
+{
+    to_json(j, static_cast<const ColorToggle&>(o), dummy);
+    WRITE("Type", type);
 }
 
 template <value_t Type, typename T>
@@ -260,7 +303,7 @@ static void read(const json& j, const char* key, KeyBind& o) noexcept
         return;
 
     if (const auto& val = j[key]; val.is_string())
-        o = val.get<std::string>().c_str();
+        o = KeyBind{ val.get<std::string>().c_str() };
 }
 
 static void read(const json& j, const char* key, char* o, std::size_t size) noexcept
@@ -340,4 +383,29 @@ static void from_json(const json& j, Color4& c)
     
     read(j, "Rainbow", c.rainbow);
     read(j, "Rainbow Speed", c.rainbowSpeed);
+}
+
+static void from_json(const json& j, ColorToggle& ct)
+{
+    from_json(j, ct.asColor4());
+    read(j, "Enabled", ct.enabled);
+}
+
+static void from_json(const json& j, Color3& c)
+{
+    read(j, "Color", c.color);
+    read(j, "Rainbow", c.rainbow);
+    read(j, "Rainbow Speed", c.rainbowSpeed);
+}
+
+static void from_json(const json& j, ColorToggle3& ct)
+{
+    from_json(j, ct.asColor3());
+    read(j, "Enabled", ct.enabled);
+}
+
+static void from_json(const json& j, HealthBar& o)
+{
+    from_json(j, static_cast<ColorToggle&>(o));
+    read(j, "Type", o.type);
 }

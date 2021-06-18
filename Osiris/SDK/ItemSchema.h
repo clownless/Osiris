@@ -59,7 +59,7 @@ struct UtlMap {
     Node<Key, Value>* elements;
 };
 
-struct String {
+struct UtlString {
     UtlMemory<char> buffer;
     int length;
 
@@ -68,28 +68,37 @@ struct String {
 
 struct PaintKit {
     int id;
-    String name;
-    String description;
-    String itemName;
-    String sameNameFamilyAggregate;
-    String pattern;
-    String normal;
-    String logoMaterial;
+    UtlString name;
+    UtlString description;
+    UtlString itemName;
+    UtlString sameNameFamilyAggregate;
+    UtlString pattern;
+    UtlString normal;
+    UtlString logoMaterial;
     bool baseDiffuseOverride;
     int rarity;
+    PAD(40)
+    float wearRemapMin;
+    float wearRemapMax;
 };
 
 struct StickerKit {
     int id;
     int rarity;
-    String name;
-    String description;
-    String itemName;
-    PAD(2 * sizeof(String))
-    String inventoryImage;
+    UtlString name;
+    UtlString description;
+    UtlString itemName;
+    PAD(2 * sizeof(UtlString))
+    UtlString inventoryImage;
 };
 
 enum class Team;
+
+struct StaticAttrib {
+    std::uint16_t defIndex;
+    std::uint32_t value;
+    bool forceGCToGenerate;
+};
 
 class EconItemDefinition {
 public:
@@ -113,10 +122,22 @@ public:
         return *reinterpret_cast<int*>(this + WIN32_LINUX(0x148, 0x1F8));
     }
 
-    bool isPaintable() noexcept
+    const UtlVector<StaticAttrib>& getStaticAttributes() noexcept
     {
-        return getCapabilities() & 1; // ITEM_CAP_PAINTABLE
+        return *reinterpret_cast<const UtlVector<StaticAttrib>*>(std::uintptr_t(this) + WIN32_LINUX(0x30, 0x50));
     }
+
+    bool hasCrateSeries() noexcept
+    {
+        const auto& staticAttributes = getStaticAttributes();
+        for (int i = 0; i < staticAttributes.size; ++i)
+            if (staticAttributes[i].defIndex == 68 /* "set supply crate series" */)
+                return true;
+        return false;
+    }
+
+    bool isPaintable() noexcept { return getCapabilities() & 1; /* ITEM_CAP_PAINTABLE */ }
+    bool isPatchable() noexcept { return getCapabilities() & (1 << 22); /* ITEM_CAP_CAN_PATCH */ }
 
     const char* getDefinitionName() noexcept
     {
@@ -170,10 +191,10 @@ struct EconItemQualityDefinition {
 };
 
 struct AlternateIconData {
-    String simpleName;
-    String largeSimpleName;
-    String iconURLSmall;
-    String iconURLLarge;
+    UtlString simpleName;
+    UtlString largeSimpleName;
+    UtlString iconURLSmall;
+    UtlString iconURLLarge;
     PAD(WIN32_LINUX(28, 48))
 };
 
@@ -267,6 +288,13 @@ public:
     }
 };
 
+class SharedObject {
+public:
+    INCONSTRUCTIBLE(SharedObject)
+
+    VIRTUAL_METHOD_V(int, getTypeID, 1, (), (this))
+};
+
 template <typename T>
 class SharedObjectTypeCache {
 public:
@@ -297,10 +325,17 @@ public:
     }
 };
 
+struct SOID {
+    std::uint64_t id;
+    std::uint32_t type;
+    std::uint32_t padding;
+};
+
 class CSPlayerInventory {
 public:
     INCONSTRUCTIBLE(CSPlayerInventory)
 
+    VIRTUAL_METHOD(void, soUpdated, 1, (SOID owner, SharedObject* object, int event), (this, owner, object, event))
     VIRTUAL_METHOD_V(void*, getItemInLoadout, 8, (Team team, int slot), (this, team, slot))
     VIRTUAL_METHOD_V(void, removeItem, 15, (std::uint64_t itemID), (this, itemID))
 
@@ -344,6 +379,11 @@ public:
     auto getAccountID() noexcept
     {
         return *reinterpret_cast<std::uint32_t*>(std::uintptr_t(this) + WIN32_LINUX(0x8, 0x10));
+    }
+
+    auto getSOID() noexcept
+    {
+        return *reinterpret_cast<SOID*>(std::uintptr_t(this) + WIN32_LINUX(0x8, 0x10));
     }
 };
 
